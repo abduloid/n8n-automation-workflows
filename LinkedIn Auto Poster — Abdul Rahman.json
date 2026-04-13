@@ -1,0 +1,450 @@
+{
+  "name": "LinkedIn Auto Poster — Abdul Rahman",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 18 * * *"
+            }
+          ]
+        }
+      },
+      "id": "eff1cb01-b980-4141-b1a6-c53e964478f5",
+      "name": "Schedule Trigger — 11PM PKT",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -432,
+        96
+      ],
+      "notes": "Runs daily at 6PM UTC = 11PM PKT"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "1iE_To9HC9LDbr5iMb6UFtB4csTqoX3DQtQJm_-3hvck"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1iE_To9HC9LDbr5iMb6UFtB4csTqoX3DQtQJm_-3hvck/edit#gid=0"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "Status",
+              "lookupValue": "Pending"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "f99248a5-eb23-4635-aa16-f6f744fd8eb9",
+      "name": "Read Pending Topic",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.2,
+      "position": [
+        -224,
+        208
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "dQWrO5PE0DgzxEs3",
+          "name": "Google Sheets account"
+        }
+      },
+      "notes": "Reads first row where Status = Pending"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "check-topic-exists",
+              "leftValue": "={{ $json.Topic }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "71b6b8de-7707-4c12-bc92-3de7c4109a47",
+      "name": "Topic Found?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        16,
+        224
+      ],
+      "notes": "Only continue if a pending topic exists"
+    },
+    {
+      "parameters": {
+        "person": "QJ_v1x6Gr3",
+        "text": "={{ $json.content.parts[0].text.replace(/[\\*\\_~]/g, '').trim() }}",
+        "shareMediaCategory": "IMAGE",
+        "additionalFields": {
+          "visibility": "PUBLIC"
+        }
+      },
+      "id": "d0b00637-df66-4d33-8bf4-ae98d4ecdb98",
+      "name": "Post to LinkedIn",
+      "type": "n8n-nodes-base.linkedIn",
+      "typeVersion": 1,
+      "position": [
+        736,
+        80
+      ],
+      "credentials": {
+        "linkedInOAuth2Api": {
+          "id": "i2dFsEl3gZZPPFOm",
+          "name": "LinkedIn account"
+        }
+      },
+      "notes": "Publishes the generated post to LinkedIn"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "1iE_To9HC9LDbr5iMb6UFtB4csTqoX3DQtQJm_-3hvck",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Sheet1",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Status": "Posted",
+            "Post Content": "={{ $node[\"Message a model\"].json.content.parts[0].text.replace(/[\\*\\_~#]/g, '').trim() }}`",
+            "Date Posted": "={{ $now.format('yyyy-MM-dd HH:mm') }}",
+            "Topic": "={{ $node[\"Read Pending Topic\"].json[\"Topic\"] }}"
+          },
+          "matchingColumns": [
+            "Topic"
+          ],
+          "schema": [
+            {
+              "id": "Topic",
+              "displayName": "Topic",
+              "required": false,
+              "defaultMatch": true,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Status",
+              "displayName": "Status",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Post Content",
+              "displayName": "Post Content",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Date Posted",
+              "displayName": "Date Posted",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "190eb461-7f59-48a3-bc53-ef84355b624a",
+      "name": "Mark as Posted",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.2,
+      "position": [
+        944,
+        16
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "dQWrO5PE0DgzxEs3",
+          "name": "Google Sheets account"
+        }
+      },
+      "notes": "Updates the row status to Posted and saves the content"
+    },
+    {
+      "parameters": {},
+      "id": "6c19df82-1345-459b-8922-1ba8b2eb395d",
+      "name": "No Pending Topics — Stop",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        240,
+        320
+      ],
+      "notes": "Gracefully stops if no pending topics found"
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "models/gemini-2.5-pro",
+          "mode": "list",
+          "cachedResultName": "models/gemini-2.5-pro"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "=Persona: You are Abdul Rahman, a highly-paid AI Automation Consultant. You DO NOT \"write articles\"; you share brutal, direct, hard-earned truths about building digital systems to busy founders.\n\nThe Topic to write about: {{ $node[\"Read Pending Topic\"].json[\"Topic\"] }}\n\nSTRICT VOICE RULES:\n1. The \"Cold Start\": Do NOT start with a question or a greeting. NO EMOJIS IN THE FIRST LINE. Start with a massive hook that sounds like a controversial opinion.\n2. FORCE THE \"SEE MORE\": Immediately after the first line, YOU MUST ADD EXACTLY FOUR BLANK LINES (`\n\n\n\n`). This is mathematically required to trigger LinkedIn's \"See More\" button.\n3. No \"AI Words\": Strictly forbidden: unleash, revolutionize, transformative, game-changer, landscape, delve, unlock, realm, skyrocketing.\n4. Rhythm: Use extremely short sentences. Chop them up. One idea per line. No massive walls of text. Be punchy. Read like a fast-paced thriller.\n5. Negative Space: Add blank lines between every single thought.\n6. Hashtags: Include exactly THREE highly relevant hashtags at the bottom, lowercase. E.g., #aiautomation #systems #founder\n\nFollow this structure precisely:\n[Line 1 - The Hook]\n(Four blank lines here)\n[The Pain Point in 2 sentences max]\n[The System Solution in a bulleted list using standard dashes \"-\"]\n[A brutally honest 1-sentence sign off. No \"What do you think?\" nonsense.]\n[3 hashtags]"
+            }
+          ]
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.googleGemini",
+      "typeVersion": 1.1,
+      "position": [
+        320,
+        192
+      ],
+      "id": "c9fc0b3f-21de-4159-be68-f4ad1adb4f5d",
+      "name": "Message a model",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "zaexj7tLmVtZBOZy",
+          "name": "Google Gemini(PaLM) Api main paid"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "filePath": "=/carousels/{{ $today.format('yyyy-MM-dd') }}/story-1/slide-01.png"
+      },
+      "id": "31f0c8cc-28dc-4129-b65c-548d683a021d",
+      "name": "Read Instagram Carousel",
+      "type": "n8n-nodes-base.readBinaryFile",
+      "typeVersion": 1,
+      "position": [
+        672,
+        256
+      ]
+    },
+    {
+      "parameters": {
+        "fromEmail": "abduworkk@gmail.com",
+        "toEmail": "abduworkk@gmail.com",
+        "subject": "✅ LinkedIn Post Auto-Published",
+        "emailFormat": "text",
+        "options": {}
+      },
+      "id": "f060b166-cca7-4d7e-97db-069b257c54c4",
+      "name": "Success Notification",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        1168,
+        16
+      ],
+      "webhookId": "6c0c91ee-0356-49b4-8f3e-8cb9c770cb92",
+      "credentials": {
+        "smtp": {
+          "id": "sleNdY4lhVIBnyGm",
+          "name": "SMTP account 2"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "id": "1759627a-b729-4f21-96cd-4a224cd9e8a6",
+      "name": "Error Trigger",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        -208,
+        512
+      ]
+    },
+    {
+      "parameters": {
+        "fromEmail": "abduworkk@gmail.com",
+        "toEmail": "abduworkk@gmail.com",
+        "subject": "❌ LinkedIn Post FAILED",
+        "emailFormat": "text",
+        "options": {}
+      },
+      "id": "cac75fa3-6230-423c-866b-04e36e44a009",
+      "name": "Error Notification",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        512
+      ],
+      "webhookId": "947211fd-0527-43dc-a8a0-e2a8e01a0b9d",
+      "credentials": {
+        "smtp": {
+          "id": "CRi1RGEU1HOuXezU",
+          "name": "SMTP account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Schedule Trigger — 11PM PKT": {
+      "main": [
+        [
+          {
+            "node": "Read Pending Topic",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Pending Topic": {
+      "main": [
+        [
+          {
+            "node": "Topic Found?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Topic Found?": {
+      "main": [
+        [
+          {
+            "node": "Message a model",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "No Pending Topics — Stop",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Post to LinkedIn": {
+      "main": [
+        [
+          {
+            "node": "Mark as Posted",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "No Pending Topics — Stop": {
+      "main": [
+        []
+      ]
+    },
+    "Message a model": {
+      "main": [
+        [
+          {
+            "node": "Read Instagram Carousel",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Instagram Carousel": {
+      "main": [
+        [
+          {
+            "node": "Post to LinkedIn",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark as Posted": {
+      "main": [
+        [
+          {
+            "node": "Success Notification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Error Trigger": {
+      "main": [
+        [
+          {
+            "node": "Error Notification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "36488eb6-7bb9-4aa4-8439-1a57cf2b3495",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "9df6bc20f54464fd8fac996e8025b2c224afe7fb48cc6ef28c5da549c876c181"
+  },
+  "id": "sPAYt0xOL_ruQuEn_Jk4w",
+  "tags": []
+}
