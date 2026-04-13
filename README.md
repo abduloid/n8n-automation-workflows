@@ -1,6 +1,3 @@
-# n8n-automation-workflows
-Free n8n automation workflows for freelancers and agency owners. Built by @abdulrahmann.o
-
 # 🤖 n8n Automation Workflows
 
 Free production-ready n8n workflows for freelancers and agency owners.
