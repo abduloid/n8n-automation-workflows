@@ -1,0 +1,283 @@
+{
+  "name": "Instagram Carousel Pipeline — Abdul Rahman",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 4 * * *"
+            }
+          ]
+        }
+      },
+      "id": "c6880c85-f052-4759-b9e0-2ca7fca447c2",
+      "name": "⏰ Daily 9AM PKT",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const feeds = [\n  { name: 'TechCrunch AI', url: 'https://techcrunch.com/category/artificial-intelligence/feed/' },\n  { name: 'Anthropic Blog', url: 'https://www.anthropic.com/news/rss.xml' },\n  { name: 'OpenAI Blog', url: 'https://openai.com/blog/rss.xml' }\n];\nconst FALLBACK_FEED = { name: 'The Verge AI', url: 'https://www.theverge.com/ai-artificial-intelligence/rss/index.xml' };\nfunction parseRSS(xml) {\n  const items = [];\n  const itemMatches = xml.matchAll(/<item[^>]*>([\\s\\S]*?)<\\/item>/gi);\n  for (const match of itemMatches) {\n    const block = match[1];\n    const getTag = (tag) => {\n      const m = block.match(new RegExp(`<${tag}[^>]*><!\\\\[CDATA\\\\[([\\\\s\\\\S]*?)\\\\]\\\\]><\\/${tag}>`, 'i')) || block.match(new RegExp(`<${tag}[^>]*>([\\\\s\\\\S]*?)<\\/${tag}>`, 'i'));\n      return m ? m[1].trim() : '';\n    };\n    items.push({ title: getTag('title'), summary: getTag('description').replace(/<[^>]+>/g, '').substring(0, 300), source_url: getTag('link') });\n  }\n  return items.slice(0, 5);\n}\nasync function fetchFeed(url, timeoutMs = 8000) {\n  const controller = new AbortController();\n  const timer = setTimeout(() => controller.abort(), timeoutMs);\n  try {\n    const res = await fetch(url, { signal: controller.signal });\n    if (!res.ok) throw new Error(`HTTP ${res.status}`);\n    return await res.text();\n  } finally { clearTimeout(timer); }\n}\nconst allItems = [];\nconst errors = [];\nfor (const feed of feeds) {\n  let xml;\n  try { xml = await fetchFeed(feed.url); }\n  catch (err) {\n    errors.push(`${feed.name} failed, using fallback.`);\n    try { xml = await fetchFeed(FALLBACK_FEED.url); feed.name = FALLBACK_FEED.name; }\n    catch (e) { errors.push(`Fallback failed: ${e.message}`); continue; }\n  }\n  for (const item of parseRSS(xml)) allItems.push({ ...item, feed: feed.name });\n}\nreturn [{ json: { stories: allItems, errors } }];"
+      },
+      "id": "3122f568-0a93-47ae-b58c-38c525295cd3",
+      "name": "📰 Scrape RSS Feeds",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            },
+            {
+              "name": "content-type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\"model\":\"claude-sonnet-4-20250514\",\"max_tokens\":1024,\"system\":\"You are a content strategist for an AI automation creator. Pick the 1 most interesting, surprising, or actionable stories from the list below for an audience of freelancers and agency owners. Return ONLY a raw JSON array of exactly 1 object with fields: title, summary, source_url. No markdown, no explanation.\",\"messages\":[{\"role\":\"user\",\"content\":{{ JSON.stringify($json.stories.map(s => ({title: s.title, summary: s.summary, source_url: s.source_url, feed: s.feed}))) }}}]}",
+        "options": {}
+      },
+      "id": "ca9d8f8f-fa1a-4ddf-a293-0c2687c01393",
+      "name": "🧠 Story Picker (Claude)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        448,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "kTP0wSn62oZczNf5",
+          "name": "Anthropic API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const raw = $input.first().json;\nconst content = raw.content?.[0]?.text || raw.content || '';\nlet stories;\ntry {\n  const cleaned = content.replace(/```json/gi, '').replace(/```/g, '').trim();\n  stories = JSON.parse(cleaned);\n} catch (e) { throw new Error('Failed to parse Claude story picker response: ' + content); }\nif (!Array.isArray(stories) || stories.length === 0) throw new Error('Expected a JSON array of stories from Claude.');\nreturn stories.map((story, i) => ({ json: { ...story, story_index: i + 1 } }));"
+      },
+      "id": "4a66130d-5adb-4004-87f4-190e2244a8f1",
+      "name": "🗂 Parse Chosen Stories",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        672,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const fs = require('fs');\nconst voiceFile = '/data/scripts/abdul-rahman-voice.txt';\nlet voicePrompt = '';\ntry { voicePrompt = fs.readFileSync(voiceFile, 'utf8'); }\ncatch (e) { voicePrompt = 'You are writing Instagram carousel content for Abdul Rahman. Short, punchy sentences. Direct. No fluff. Bold, practical, no-nonsense tone. Never use: In today world, Game-changer, Leverage.'; }\nconst item = $input.first().json;\nreturn [{ json: { ...item, voicePrompt } }];"
+      },
+      "id": "819b63c4-eb71-4bce-ba13-96d03b364cc4",
+      "name": "📄 Load Voice Prompt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            },
+            {
+              "name": "content-type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\"model\":\"claude-sonnet-4-20250514\",\"max_tokens\":2048,\"system\":{{ JSON.stringify($json.voicePrompt) }},\"messages\":[{\"role\":\"user\",\"content\":\"Write a 10-slide Instagram carousel script about this story:\\n\\nTitle: \" + $json.title + \"\\n\\nSummary: \" + $json.summary + \"\\n\\nReturn ONLY a raw JSON array of exactly 10 objects with fields: slide_number (integer), headline (string), body_text (string, max 20 words). No markdown, no explanation.\\n\\nSlide 1: hook. Slides 2-8: content. Slide 9: takeaway. Slide 10: CTA - Follow @abdulrahmann.o for daily AI automation tips.\"}]}",
+        "options": {}
+      },
+      "id": "5f1207fb-db1f-4555-8d4e-4d0f49ec5559",
+      "name": "✍️ Script Writer (Claude)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        1104,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "kTP0wSn62oZczNf5",
+          "name": "Anthropic API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst carousels = [];\nfor (const item of items) {\n  const raw = item.json;\n  const content = raw.content?.[0]?.text || raw.content || '';\n  let slides;\n  try {\n    const cleaned = content.replace(/```json/gi, '').replace(/```/g, '').trim();\n    slides = JSON.parse(cleaned);\n  } catch (e) { throw new Error(`Failed to parse slide script: ${content.substring(0, 200)}`); }\n  carousels.push({ title: item.json.title || 'Story', source_url: item.json.source_url || '', slides });\n}\nreturn [{ json: { carousels } }];"
+      },
+      "id": "4070f972-338c-4261-bf1a-0bb4ffa84e93",
+      "name": "📦 Bundle Scripts",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1328,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const fs = require('fs');\nconst carousels = $input.first().json.carousels || [];\nconst outputData = { carousels };\nconst pendingFile = '/data/scripts/pending-insta.json';\ntry {\n  fs.writeFileSync(pendingFile, JSON.stringify(outputData), 'utf8');\n} catch (err) {\n  throw new Error('Failed to write trigger file: ' + err.message);\n}\nreturn [{ json: { status: 'dispatched', file: pendingFile, count: carousels.length } }];"
+      },
+      "id": "node-dispatch-watcher",
+      "name": "Dispatch to Windows Builder",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1792,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "return $input.all();"
+      },
+      "id": "node-write-log-finish",
+      "name": "🏁 Finish",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2000,
+        304
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "⏰ Daily 9AM PKT": {
+      "main": [
+        [
+          {
+            "node": "📰 Scrape RSS Feeds",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📰 Scrape RSS Feeds": {
+      "main": [
+        [
+          {
+            "node": "🧠 Story Picker (Claude)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🧠 Story Picker (Claude)": {
+      "main": [
+        [
+          {
+            "node": "🗂 Parse Chosen Stories",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🗂 Parse Chosen Stories": {
+      "main": [
+        [
+          {
+            "node": "📄 Load Voice Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📄 Load Voice Prompt": {
+      "main": [
+        [
+          {
+            "node": "✍️ Script Writer (Claude)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "✍️ Script Writer (Claude)": {
+      "main": [
+        [
+          {
+            "node": "📦 Bundle Scripts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📦 Bundle Scripts": {
+      "main": [
+        [
+          {
+            "node": "Dispatch to Windows Builder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Dispatch to Windows Builder": {
+      "main": [
+        [
+          {
+            "node": "🏁 Finish",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "d14cc60e-d4e3-4f06-aa62-f3fbd8b352b0",
+  "meta": {
+    "instanceId": "9df6bc20f54464fd8fac996e8025b2c224afe7fb48cc6ef28c5da549c876c181"
+  },
+  "id": "Ds7uZHj43Uq0cQFG",
+  "tags": []
+}
